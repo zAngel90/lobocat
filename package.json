@@ -1,0 +1,20 @@
+{
+  "name": "backendmysql",
+  "version": "1.0.0",
+  "description": "Backend con MySQL para Lobomat",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js",
+    "dev": "nodemon index.js"
+  },
+  "dependencies": {
+    "express": "^4.18.2",
+    "mysql2": "^3.9.1",
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.1",
+    "node-fetch": "^2.6.7"
+  },
+  "devDependencies": {
+    "nodemon": "^3.0.3"
+  }
+} 
