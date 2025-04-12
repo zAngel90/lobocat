@@ -172,7 +172,7 @@ app.get('/products/:id', async (req, res) => {
   }
 });
 
-app.get('/products/search', searchProducts);
+app.get('/search', searchProducts);
 
 // Endpoint para crear pedido con información de Minecraft
 app.post('/api/orders', async (req, res) => {
