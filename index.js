@@ -3,8 +3,36 @@ const cors = require('cors');
 const fetch = require('node-fetch');
 const pool = require('./src/config/db');
 const adminRoutes = require('./src/routes/admin');
+const mysql = require('mysql2');
+const bcrypt = require('bcrypt');
+const jwt = require('jsonwebtoken');
+const axios = require('axios');
+require('dotenv').config();
 
 const app = express();
+
+// Middleware de autenticación para admin
+const authenticateAdmin = (req, res, next) => {
+  const username = req.headers.username;
+  const password = req.headers.password;
+
+  if (!username || !password) {
+    return res.status(401).json({ 
+      success: false, 
+      message: 'Credenciales no proporcionadas' 
+    });
+  }
+
+  // Verificar las credenciales (usando las mismas que usas para el login)
+  if (username === 'admin' && password === 'admin123') {
+    next();
+  } else {
+    res.status(401).json({ 
+      success: false, 
+      message: 'Credenciales inválidas' 
+    });
+  }
+};
 
 // CORS configuration
 app.use(cors({
@@ -114,6 +142,180 @@ app.get('/products', async (req, res) => {
   } catch (error) {
     console.error('Error al obtener productos:', error);
     res.status(500).json({ error: 'Error en el servidor' });
+  }
+});
+
+// Endpoint para obtener un producto por ID
+app.get('/products/:id', async (req, res) => {
+  try {
+    const [rows] = await pool.query(
+      'SELECT * FROM products WHERE id = ?',
+      [req.params.id]
+    );
+
+    if (rows.length === 0) {
+      return res.status(404).json({
+        success: false,
+        message: 'Producto no encontrado'
+      });
+    }
+
+    res.json({
+      success: true,
+      data: rows[0]
+    });
+  } catch (error) {
+    console.error('Error al obtener el producto:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Error al obtener el producto'
+    });
+  }
+});
+
+// Endpoint para crear pedido con información de Minecraft
+app.post('/api/orders', async (req, res) => {
+  const { product_id, quantity, total, product_type, minecraft_info } = req.body;
+  
+  try {
+    const connection = await pool.getConnection();
+    
+    // Iniciar transacción
+    await connection.beginTransaction();
+    
+    try {
+      // Insertar pedido
+      const [orderResult] = await connection.execute(
+        'INSERT INTO orders (product_id, quantity, total, product_type) VALUES (?, ?, ?, ?)',
+        [product_id, quantity, total, product_type]
+      );
+      
+      const orderId = orderResult.insertId;
+      
+      // Si es un pedido de Minecraft, insertar la información adicional
+      if (product_type === 'minecraft' && minecraft_info) {
+        await connection.execute(
+          'INSERT INTO minecraft_info (order_id, xbox_email, xbox_password, contact_info) VALUES (?, ?, ?, ?)',
+          [orderId, minecraft_info.xbox_email, minecraft_info.xbox_password, minecraft_info.contact_info]
+        );
+      }
+      
+      await connection.commit();
+      
+      res.status(201).json({
+        success: true,
+        message: 'Pedido creado exitosamente',
+        order_id: orderId
+      });
+      
+    } catch (error) {
+      await connection.rollback();
+      throw error;
+    } finally {
+      connection.release();
+    }
+    
+  } catch (error) {
+    console.error('Error al crear pedido:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Error al crear el pedido'
+    });
+  }
+});
+
+// Endpoint para obtener información de Minecraft de un pedido
+app.get('/api/orders/:orderId/minecraft-info', async (req, res) => {
+  const { orderId } = req.params;
+  
+  try {
+    const [rows] = await pool.execute(
+      'SELECT * FROM minecraft_info WHERE order_id = ?',
+      [orderId]
+    );
+    
+    if (rows.length === 0) {
+      return res.status(404).json({
+        success: false,
+        message: 'No se encontró información de Minecraft para este pedido'
+      });
+    }
+    
+    res.json({
+      success: true,
+      data: rows[0]
+    });
+    
+  } catch (error) {
+    console.error('Error al obtener información de Minecraft:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Error al obtener la información'
+    });
+  }
+});
+
+// Endpoint para obtener todos los pedidos con su información de Minecraft
+app.get('/api/orders', async (req, res) => {
+  try {
+    const [orders] = await pool.execute(`
+      SELECT o.*, mi.xbox_email, mi.xbox_password, mi.contact_info, p.title as product_title
+      FROM orders o
+      LEFT JOIN minecraft_info mi ON o.id = mi.order_id
+      LEFT JOIN products p ON o.product_id = p.id
+      ORDER BY o.created_at DESC
+    `);
+    
+    res.json({
+      success: true,
+      data: orders
+    });
+    
+  } catch (error) {
+    console.error('Error al obtener pedidos:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Error al obtener los pedidos'
+    });
+  }
+});
+
+// Endpoint para actualizar el estado de una orden
+app.put('/api/orders/:orderId/status', authenticateAdmin, async (req, res) => {
+  const { orderId } = req.params;
+  const { status } = req.body;
+
+  if (!['pending', 'completed', 'cancelled'].includes(status)) {
+    return res.status(400).json({ 
+      success: false, 
+      message: 'Estado no válido. Debe ser: pending, completed o cancelled' 
+    });
+  }
+
+  try {
+    const [result] = await pool.query(
+      'UPDATE orders SET status = ? WHERE id = ?',
+      [status, orderId]
+    );
+
+    if (result.affectedRows === 0) {
+      return res.status(404).json({ 
+        success: false, 
+        message: 'Orden no encontrada' 
+      });
+    }
+
+    res.json({ 
+      success: true, 
+      message: 'Estado actualizado correctamente',
+      data: { id: orderId, status } 
+    });
+  } catch (error) {
+    console.error('Error al actualizar el estado de la orden:', error);
+    res.status(500).json({ 
+      success: false, 
+      message: 'Error al actualizar el estado de la orden' 
+    });
   }
 });
 
