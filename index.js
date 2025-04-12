@@ -6,6 +6,7 @@ const adminRoutes = require('./src/routes/admin');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const axios = require('axios');
+const { searchProducts } = require('./controllers/searchController');
 require('dotenv').config();
 
 const app = express();
@@ -131,7 +132,7 @@ app.post('/api/payment/create', async (req, res) => {
   }
 });
 
-// Endpoint público para obtener productos
+// Rutas de productos
 app.get('/products', async (req, res) => {
   try {
     const [products] = await pool.execute(
@@ -144,7 +145,6 @@ app.get('/products', async (req, res) => {
   }
 });
 
-// Endpoint para obtener un producto por ID
 app.get('/products/:id', async (req, res) => {
   try {
     const [rows] = await pool.query(
@@ -171,6 +171,8 @@ app.get('/products/:id', async (req, res) => {
     });
   }
 });
+
+app.get('/products/search', searchProducts);
 
 // Endpoint para crear pedido con información de Minecraft
 app.post('/api/orders', async (req, res) => {
