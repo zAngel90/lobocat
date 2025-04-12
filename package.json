@@ -4,15 +4,15 @@
   "description": "Backend con MySQL para Lobomat",
   "main": "index.js",
   "engines": {
-    "node": ">=16.0.0 <22.0.0"
+    "node": "18.x"
   },
   "scripts": {
     "start": "node index.js",
     "dev": "nodemon index.js",
-    "postinstall": "npm rebuild bcrypt --build-from-source"
+    "build": "npm install"
   },
   "dependencies": {
-    "bcrypt": "^5.1.1",
+    "bcryptjs": "^2.4.3",
     "cors": "^2.8.5",
     "dotenv": "^16.4.1",
     "express": "^4.18.2",
